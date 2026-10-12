@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # GitHub release
+      id-token: write # npm trusted publishing + provenance
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,6 +32,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          registry-url: https://registry.npmjs.org
 
       - name: Check tag matches package.json version
         run: |
@@ -64,3 +66,16 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md $PRERELEASE --verify-tag ./*.zip
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # Authenticated through OIDC (trusted publisher configured on npmjs.com), no stored token
+      - name: Publish to npm
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            echo "$NAME@$VERSION is already on npm, skipping"
+            exit 0
+          fi
+          TAG=""
+          case "$VERSION" in *-*) TAG="--tag next" ;; esac
+          npm publish $TAG

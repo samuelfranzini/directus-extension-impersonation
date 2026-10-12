@@ -4,7 +4,6 @@
   "version": "1.0.0",
   "type": "module",
   "icon": "visibility",
-  "private": true,
   "license": "MIT",
   "author": "Samuel Franzini",
   "repository": {
@@ -25,6 +24,10 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
     "node": ">=18"
   },

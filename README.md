@@ -22,7 +22,13 @@ Compatible with Directus `^10.10.0 || ^11.0.0 || ^12.0.0`.
 
 ## Installation
 
-This extension is private and not published to npm. Build it from source, or take the archive attached to a [GitHub release](../../releases):
+From npm, in the Directus project that should load the extension:
+
+```bash
+npm install directus-extension-impersonation
+```
+
+Then restart Directus. Alternatively, take the archive attached to a [GitHub release](../../releases) and unpack it into the Directus `extensions` directory, or build it from source:
 
 ```bash
 git clone git@github.com:samuelfranzini/directus-extension-impersonation.git
@@ -163,4 +169,4 @@ npm version minor    # bumps package.json, updates CHANGELOG.md, tags vX.Y.Z
 git push --follow-tags
 ```
 
-Pushing the tag runs the tests, builds the extension and attaches `directus-extension-impersonation-vX.Y.Z.zip` to a GitHub release.
+Pushing the tag runs the tests, builds the extension, attaches `directus-extension-impersonation-vX.Y.Z.zip` to a GitHub release and publishes the package to npm (with provenance, through npm trusted publishing).
