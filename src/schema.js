@@ -77,7 +77,12 @@ const addColumn = (table, { field, type, schema = {} }) => {
 const isRegistered = async (database, collection) =>
   Boolean(await database('directus_collections').where({ collection }).first())
 
-export const ensureSchema = async ({ services, getSchema, database, logger }) => {
+// La licence (LICENSE_KEY) s'active pendant le démarrage : tant qu'elle ne l'est pas, Directus applique les limites
+// du tier Core. On retente donc la création enregistrée avant de se rabattre sur la table database-only.
+const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+export const ensureSchema = async ({ services, getSchema, database, logger }, { retryDelaysMs = RETRY_DELAYS_MS } = {}) => {
   const { CollectionsService, FieldsService } = services
   const freshSchema = () => getSchema({ database, bypassCache: true })
 
@@ -102,7 +107,16 @@ export const ensureSchema = async ({ services, getSchema, database, logger }) =>
     }
 
     try {
-      await new CollectionsService({ knex: database, schema: await freshSchema() }).createOne(definition)
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await new CollectionsService({ knex: database, schema: await freshSchema() }).createOne(definition)
+          break
+        } catch (err) {
+          if (!isLimitError(err) || attempt >= retryDelaysMs.length) throw err
+          logger.warn(`[impersonation] collections limit reached (license not active yet?), retrying in ${retryDelaysMs[attempt] / 1000}s`)
+          await sleep(retryDelaysMs[attempt])
+        }
+      }
       logger.info(`[impersonation] collection ${definition.collection} created`)
     } catch (err) {
       if (!isLimitError(err)) throw err

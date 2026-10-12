@@ -3,8 +3,9 @@ import { describe, it } from 'node:test'
 import { ensureSchema, LOG_COLLECTION } from '../../src/schema.js'
 
 // Faux contexte d'extension : enregistre les appels aux services Directus
-const fakeContext = ({ tables = [], missingColumns = [], registered = true, limitExceeded = false } = {}) => {
+const fakeContext = ({ tables = [], missingColumns = [], registered = true, limitExceeded = false, limitFor = Infinity } = {}) => {
   const calls = { collections: [], fields: [], created: [], altered: [], warnings: [] }
+  let attempts = 0
 
   // Colonnes demandées à knex, sous forme « champ:type »
   const recorder = (into) => {
@@ -30,7 +31,8 @@ const fakeContext = ({ tables = [], missingColumns = [], registered = true, limi
       services: {
         CollectionsService: class {
           async createOne(def) {
-            if (limitExceeded) throw Object.assign(new Error('Collections limit exceeded.'), { code: 'LIMIT_EXCEEDED' })
+            attempts++
+            if (limitExceeded && attempts <= limitFor) throw Object.assign(new Error('Collections limit exceeded.'), { code: 'LIMIT_EXCEEDED' })
             calls.collections.push(def)
           }
         },
@@ -89,7 +91,7 @@ describe('ensureSchema', () => {
 
   it('falls back to a database-only table when the collections limit is reached', async () => {
     const { calls, context } = fakeContext({ limitExceeded: true })
-    await ensureSchema(context)
+    await ensureSchema(context, { retryDelaysMs: [0, 0] })
 
     assert.deepEqual(calls.collections, [])
     assert.equal(calls.created.length, 1)
@@ -99,7 +101,15 @@ describe('ensureSchema', () => {
       ['admin_id:uuid', 'ended_at:timestamp', 'expires_at:timestamp', 'id:uuid', 'ip:string', 'reason:text',
         'started_at:timestamp', 'target_id:uuid', 'user_agent:string'],
     )
-    assert.equal(calls.warnings.length, 1)
+    assert.equal(calls.warnings.length, 3) // two retries, then the fallback
+  })
+
+  it('creates the registered collection when the license activates during the retries', async () => {
+    const { calls, context } = fakeContext({ limitExceeded: true, limitFor: 2 })
+    await ensureSchema(context, { retryDelaysMs: [0, 0, 0] })
+
+    assert.deepEqual(calls.collections.map(c => c.collection), [LOG_COLLECTION])
+    assert.deepEqual(calls.created, [])
   })
 
   it('rethrows any other creation error', async () => {
