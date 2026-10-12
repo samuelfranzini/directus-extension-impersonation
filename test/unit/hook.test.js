@@ -175,3 +175,34 @@ describe('POST /impersonation/stop', () => {
     assert.equal(res.statusCode, 401)
   })
 })
+
+describe('schema setup', () => {
+  const register = (env) => {
+    const actions = {}
+    const created = []
+    const database = () => { throw new Error('database not available in unit tests') }
+    database.schema = { hasTable: async name => { created.push(name); return true }, hasColumn: async () => true }
+    extension({ init() {}, action: (event, handler) => { actions[event] = handler } }, {
+      database,
+      env: { SECRET, ...env },
+      logger: { info() {}, warn() {}, error() {} },
+      services: {},
+      getSchema: async () => ({}),
+    })
+    return { actions, created }
+  }
+
+  it('waits for the server to start before touching the schema', async () => {
+    const { actions, created } = register({})
+    assert.deepEqual(created, [])
+
+    actions['server.start']()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.ok(created.includes('impersonation_log'))
+  })
+
+  it('does nothing when IMPERSONATION_AUTO_SETUP is false', () => {
+    const { actions } = register({ IMPERSONATION_AUTO_SETUP: 'false' })
+    assert.equal(actions['server.start'], undefined)
+  })
+})

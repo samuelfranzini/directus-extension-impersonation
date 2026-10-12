@@ -18,12 +18,16 @@ const MAX_ROLE_DEPTH = 20
 const OTP_MAX_FAILURES = 5
 const OTP_WINDOW_MS = 10 * 60 * 1000
 
-export default ({ init }, context) => {
+export default ({ init, action }, context) => {
   const { database, env, logger } = context
 
+  // Attendre le démarrage du serveur : la licence (LICENSE_KEY) n'est active qu'à ce moment, et Directus applique
+  // les limites du tier Core tant qu'elle ne l'est pas (limite de collections).
   if (String(env.IMPERSONATION_AUTO_SETUP ?? 'true') !== 'false') {
-    ensureSchema(context).catch(err =>
-      logger.error(`[impersonation] schema setup failed: ${err.message}`))
+    action('server.start', () => {
+      ensureSchema(context).catch(err =>
+        logger.error(`[impersonation] schema setup failed: ${err.message}`))
+    })
   }
 
   const ttlMs = clamp(parseDuration(env.IMPERSONATION_TTL, DEFAULT_TTL_MS), MIN_TTL_MS, MAX_TTL_MS)

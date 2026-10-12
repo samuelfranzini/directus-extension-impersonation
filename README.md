@@ -41,7 +41,7 @@ Copy `package.json` and `dist/` into a `directus-extension-impersonation` folder
 
 ## Database
 
-On startup, the extension creates the collection it needs if it doesn't exist yet (an existing collection only gets missing columns). Set `IMPERSONATION_AUTO_SETUP=false` to manage it yourself.
+Once the server has started (so that the license is active), the extension creates the collection it needs if it doesn't exist yet (an existing collection only gets missing columns). Set `IMPERSONATION_AUTO_SETUP=false` to manage it yourself.
 
 | Collection | Purpose |
 | --- | --- |
