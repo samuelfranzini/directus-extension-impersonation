@@ -49,6 +49,8 @@ On startup, the extension creates the collection it needs if it doesn't exist ye
 
 The identifiers are plain UUIDs with no foreign key, so the log survives the deletion of a user. Give **no permission** on this collection: only administrators can read it (Content → Impersonation Log) and only the extension writes to it.
 
+Directus limits the number of registered collections (25 on the Core tier of Directus 12). When that limit is reached, the extension logs a warning and creates `impersonation_log` as a **database-only table**: it is not registered in Directus, so it doesn't count toward the limit, but it isn't visible in the Studio and must be read directly in the database. Sessions are audited either way.
+
 ## Configuration
 
 | Environment variable | Description | Default |

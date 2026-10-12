@@ -58,6 +58,25 @@ const COLLECTIONS = [
   },
 ]
 
+// Directus plafonne le nombre de collections enregistrées (tier Core : 25). Les tables « database-only »,
+// sans métadonnées Directus, ne sont pas comptées : on y retombe quand la limite est atteinte.
+// L'extension n'écrit dans le journal qu'avec knex ; seule la consultation dans le Studio est perdue.
+const isLimitError = err =>
+  err?.code === 'LIMIT_EXCEEDED' || err?.extensions?.code === 'LIMIT_EXCEEDED' || /limit exceeded/i.test(err?.message ?? '')
+
+const addColumn = (table, { field, type, schema = {} }) => {
+  const column = field === 'id' && schema.is_primary_key
+    ? table.uuid(field).primary()
+    : type === 'uuid' ? table.uuid(field)
+      : type === 'text' ? table.text(field)
+        : type === 'timestamp' ? table.timestamp(field, { useTz: true })
+          : table.string(field, schema.max_length ?? 255)
+  if (!schema.is_primary_key && schema.is_nullable === false) column.notNullable()
+}
+
+const isRegistered = async (database, collection) =>
+  Boolean(await database('directus_collections').where({ collection }).first())
+
 export const ensureSchema = async ({ services, getSchema, database, logger }) => {
   const { CollectionsService, FieldsService } = services
   const freshSchema = () => getSchema({ database, bypassCache: true })
@@ -70,13 +89,28 @@ export const ensureSchema = async ({ services, getSchema, database, logger }) =>
       }
       if (!missingColumns.length) continue
 
-      const fieldsService = new FieldsService({ knex: database, schema: await freshSchema() })
-      for (const field of missingColumns) await fieldsService.createField(definition.collection, field)
+      if (await isRegistered(database, definition.collection)) {
+        const fieldsService = new FieldsService({ knex: database, schema: await freshSchema() })
+        for (const field of missingColumns) await fieldsService.createField(definition.collection, field)
+      } else {
+        await database.schema.alterTable(definition.collection, table => {
+          for (const field of missingColumns) addColumn(table, field)
+        })
+      }
       logger.info(`[impersonation] fields added to ${definition.collection}: ${missingColumns.map(f => f.field).join(', ')}`)
       continue
     }
 
-    await new CollectionsService({ knex: database, schema: await freshSchema() }).createOne(definition)
-    logger.info(`[impersonation] collection ${definition.collection} created`)
+    try {
+      await new CollectionsService({ knex: database, schema: await freshSchema() }).createOne(definition)
+      logger.info(`[impersonation] collection ${definition.collection} created`)
+    } catch (err) {
+      if (!isLimitError(err)) throw err
+      await database.schema.createTable(definition.collection, table => {
+        for (const field of definition.fields) addColumn(table, field)
+      })
+      logger.warn(`[impersonation] collections limit reached: ${definition.collection} created as a database-only table `
+        + '(not registered in Directus, so not visible in the Studio)')
+    }
   }
 }
