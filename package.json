@@ -1,7 +1,7 @@
 {
   "name": "directus-extension-impersonation",
   "description": "Directus hook extension: read-only, audited impersonation of user accounts by administrators",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "icon": "visibility",
   "license": "MIT",
